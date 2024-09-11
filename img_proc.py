@@ -6,7 +6,7 @@ from tkinter import ttk
 from tkinter import messagebox
 from PIL import Image, ImageFilter
 
-# Function to process an image by applying a filter
+# Function to process an image by applying a filter.
 def process_image(input_queue, progress_queue):
     while True:
         image_path, output_path = input_queue.get()
@@ -21,7 +21,7 @@ def process_image(input_queue, progress_queue):
         finally:
             progress_queue.put(1)  # Signal that one image has been processed
 
-# Function to update CPU usage per core
+# Function to update CPU usage per core.
 def update_cpu_usage(cpu_label, total_cores):
     cpu_percentages = psutil.cpu_percent(percpu=True)
     cpu_label.config(text=f"Total Cores: {total_cores}, CPU Usage per core: {cpu_percentages}")
