@@ -3,9 +3,11 @@ import psutil
 import time
 from PIL import Image, ImageFilter
 import os
+import tkinter as tk
+from tkinter import ttk
 
 # Function to process an image by applying a filter
-def process_image(image_path, output_path):
+def process_image(image_path, output_path, progress_var, progress_step):
     try:
         # Open an image file
         with Image.open(image_path) as img:
@@ -15,17 +17,17 @@ def process_image(image_path, output_path):
             filtered_img.save(output_path)
     except Exception as e:
         print(f"Error processing {image_path}: {e}")
+    finally:
+        # Update progress bar
+        progress_var.set(progress_var.get() + progress_step)
 
 # Function to display CPU usage per core
-def display_cpu_usage():
-    while True:
-        # Get CPU usage for each core
-        cpu_percentages = psutil.cpu_percent(percpu=True)
-        # Print CPU usage
-        print(f"CPU Usage per core: {cpu_percentages}")
-        time.sleep(1)  # Update every second
+def update_cpu_usage(cpu_label):
+    cpu_percentages = psutil.cpu_percent(percpu=True)
+    cpu_label.config(text=f"CPU Usage per core: {cpu_percentages}")
+    cpu_label.after(1000, update_cpu_usage, cpu_label)  # Update every second
 
-if __name__ == '__main__':
+def start_processing():
     # Directory containing images to process
     input_dir = 'input_images'
     # Directory to save processed images
@@ -35,16 +37,13 @@ if __name__ == '__main__':
     # List all image files in the input directory
     image_files = [f for f in os.listdir(input_dir) if f.endswith(('.png', '.jpg', '.jpeg'))]
 
-    # Create a process for monitoring CPU usage
-    monitor_process = multiprocessing.Process(target=display_cpu_usage)
-    monitor_process.start()
-
     # Create and start image processing processes
     processes = []
+    progress_step = 100 / len(image_files)  # Calculate step for progress bar
     for image_file in image_files:
         input_path = os.path.join(input_dir, image_file)
         output_path = os.path.join(output_dir, f"processed_{image_file}")
-        process = multiprocessing.Process(target=process_image, args=(input_path, output_path))
+        process = multiprocessing.Process(target=process_image, args=(input_path, output_path, progress_var, progress_step))
         processes.append(process)
         process.start()
 
@@ -52,5 +51,25 @@ if __name__ == '__main__':
     for process in processes:
         process.join()
 
-    # Terminate the monitoring process
-    monitor_process.terminate()
+# Set up the GUI
+root = tk.Tk()
+root.title("Image Processing with Multi-core CPU")
+
+# CPU Usage Label
+cpu_label = tk.Label(root, text="CPU Usage per core: ")
+cpu_label.pack(pady=10)
+
+# Progress Bar
+progress_var = tk.DoubleVar()
+progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
+progress_bar.pack(fill=tk.X, padx=20, pady=10)
+
+# Start Button
+start_button = tk.Button(root, text="Start Processing", command=start_processing)
+start_button.pack(pady=10)
+
+# Start updating CPU usage
+update_cpu_usage(cpu_label)
+
+# Start the GUI event loop
+root.mainloop()
