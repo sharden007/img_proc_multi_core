@@ -27,13 +27,13 @@ def update_cpu_usage(cpu_label, total_cores):
     cpu_label.config(text=f"Total Cores: {total_cores}, CPU Usage per core: {cpu_percentages}")
     cpu_label.after(1000, update_cpu_usage, cpu_label, total_cores)  # Update every second
 
-# Function to update progress bar
 def update_progress(progress_var, progress_queue, total_images):
     processed_images = 0
     while processed_images < total_images:
         progress_queue.get()  # Wait for a signal from the worker process
         processed_images += 1
         progress_var.set((processed_images / total_images) * 100)
+        root.update_idletasks()  # Update the GUI
 
 def start_processing():
     input_dir = 'input_images'
@@ -64,14 +64,11 @@ def start_processing():
         processes.append(process)
         process.start()
 
-    # Start a thread to update the progress bar
-    progress_thread = multiprocessing.Process(target=update_progress, args=(progress_var, progress_queue, len(image_files)))
-    progress_thread.start()
+    # Update progress in the main thread
+    update_progress(progress_var, progress_queue, len(image_files))
 
     for process in processes:
         process.join()
-
-    progress_thread.join()
 
 # Set up the GUI
 root = tk.Tk()
