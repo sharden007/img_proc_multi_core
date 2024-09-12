@@ -28,7 +28,7 @@ def update_cpu_usage(cpu_labels):
         label.config(text=f"Core {i+1}: {cpu_percentages[i]}%")
     root.after(1000, update_cpu_usage, cpu_labels)  # Update every second
 
-def update_progress(progress_var, progress_queue, total_images):
+def update_progress(progress_var, progress_queue, total_images, status_label):
     processed_images = 0
     initial_progress = 5
     progress_var.set(initial_progress)  # Start at 5%
@@ -39,6 +39,10 @@ def update_progress(progress_var, progress_queue, total_images):
         processed_images += 1
         progress_var.set(initial_progress + processed_images * increment)
         root.update_idletasks()  # Update the GUI
+
+    # When processing is complete
+    progress_var.set(100)
+    status_label.config(text="Complete", foreground="green")
 
 def start_processing():
     input_dir = 'input_images'
@@ -70,31 +74,36 @@ def start_processing():
         process.start()
 
     # Update progress in the main thread
-    update_progress(progress_var, progress_queue, len(image_files))
+    update_progress(progress_var, progress_queue, len(image_files), status_label)
 
     for process in processes:
         process.join()
 
-# Set up the GUI
-root = tk.Tk()
-root.title("Image Processing with Multi-core CPU")
+if __name__ == '__main__':
+    # Set up the GUI
+    root = tk.Tk()
+    root.title("Image Processing with Multi-core CPU")
 
-total_cores = multiprocessing.cpu_count()
+    total_cores = multiprocessing.cpu_count()
 
-# Create labels for each CPU core
-cpu_labels = []
-for i in range(total_cores):
-    label = tk.Label(root, text=f"Core {i+1}: 0%")
-    label.pack(pady=2)
-    cpu_labels.append(label)
+    # Create labels for each CPU core
+    cpu_labels = []
+    for i in range(total_cores):
+        label = tk.Label(root, text=f"Core {i+1}: 0%")
+        label.pack(pady=2)
+        cpu_labels.append(label)
 
-progress_var = tk.DoubleVar()
-progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
-progress_bar.pack(fill=tk.X, padx=20, pady=10)
+    progress_var = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
+    progress_bar.pack(fill=tk.X, padx=20, pady=10)
 
-start_button = tk.Button(root, text="Start Processing", command=start_processing)
-start_button.pack(pady=10)
+    # Status label
+    status_label = tk.Label(root, text="Processing...", foreground="black")
+    status_label.pack(pady=5)
 
-update_cpu_usage(cpu_labels)
+    start_button = tk.Button(root, text="Start Processing", command=start_processing)
+    start_button.pack(pady=10)
 
-root.mainloop()
+    update_cpu_usage(cpu_labels)
+
+    root.mainloop()
