@@ -40,7 +40,7 @@ def update_progress(progress_var, progress_queue, total_images, status_label):
         progress_var.set(initial_progress + processed_images * increment)
         root.update_idletasks()  # Update the GUI
 
-    # When processing is complete
+    # When processing is complete.
     progress_var.set(100)
     status_label.config(text="Complete", foreground="green")
 
