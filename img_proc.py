@@ -6,7 +6,7 @@ from tkinter import ttk
 from tkinter import messagebox
 from PIL import Image, ImageFilter
 
-# Function to process an image by applying a filter
+# Function to process an image by applying a filter.
 def process_image(input_queue, progress_queue):
     while True:
         image_path, output_path = input_queue.get()
