@@ -1,12 +1,12 @@
+import sys
+import os
 import multiprocessing
 import psutil
-import os
-import tkinter as tk
-from tkinter import ttk
-from tkinter import messagebox
 from PIL import Image, ImageFilter
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton, QProgressBar
+from PyQt5.QtCore import QTimer
 
-# Function to process an image by applying a filter
+# Function to process an image by applying a filter.
 def process_image(input_queue, progress_queue):
     while True:
         image_path, output_path = input_queue.get()
@@ -21,89 +21,107 @@ def process_image(input_queue, progress_queue):
         finally:
             progress_queue.put(1)  # Signal that one image has been processed
 
-# Function to update CPU usage per core
-def update_cpu_usage(cpu_labels):
-    cpu_percentages = psutil.cpu_percent(percpu=True)
-    for i, label in enumerate(cpu_labels):
-        label.config(text=f"Core {i+1}: {cpu_percentages[i]}%")
-    root.after(1000, update_cpu_usage, cpu_labels)  # Update every second
+class ImageProcessorApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        
+        self.setWindowTitle("Image Processing with Multi-core CPU")
+        
+        self.total_cores = multiprocessing.cpu_count()
+        self.cpu_labels = []
+        self.initUI()
+        
+        self.input_queue = multiprocessing.Queue()
+        self.progress_queue = multiprocessing.Queue()
+        
+    def initUI(self):
+        # Layout
+        layout = QVBoxLayout()
+        
+        # CPU usage labels
+        for i in range(self.total_cores):
+            label = QLabel(f"Core {i+1}: 0%")
+            layout.addWidget(label)
+            self.cpu_labels.append(label)
+        
+        # Progress bar
+        self.progress_bar = QProgressBar(self)
+        layout.addWidget(self.progress_bar)
+        
+        # Status label
+        self.status_label = QLabel("Processing...", self)
+        layout.addWidget(self.status_label)
+        
+        # Start button
+        start_button = QPushButton("Start Processing", self)
+        start_button.clicked.connect(self.start_processing)
+        layout.addWidget(start_button)
+        
+        # Set central widget
+        central_widget = QWidget()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+        
+    def update_cpu_usage(self):
+        cpu_percentages = psutil.cpu_percent(percpu=True)
+        for i, label in enumerate(self.cpu_labels):
+            label.setText(f"Core {i+1}: {cpu_percentages[i]}%")
+    
+    def update_progress(self, total_images):
+        processed_images = 0
+        initial_progress = 5
+        increment = (100 - initial_progress) / total_images
+        
+        while processed_images < total_images:
+            self.progress_queue.get()  # Wait for a signal from the worker process
+            processed_images += 1
+            progress_value = initial_progress + processed_images * increment
+            self.progress_bar.setValue(progress_value)
+        
+        # When processing is complete.
+        self.progress_bar.setValue(100)
+        self.status_label.setText("Complete")
+    
+    def start_processing(self):
+        input_dir = 'input_images'
+        output_dir = 'output_images'
+        os.makedirs(output_dir, exist_ok=True)
 
-def update_progress(progress_var, progress_queue, total_images, status_label):
-    processed_images = 0
-    initial_progress = 5
-    progress_var.set(initial_progress)  # Start at 5%
-    increment = (100 - initial_progress) / total_images  # Calculate increment per image
+        image_files = [f for f in os.listdir(input_dir) if f.endswith(('.png', '.jpg', '.jpeg'))]
 
-    while processed_images < total_images:
-        progress_queue.get()  # Wait for a signal from the worker process
-        processed_images += 1
-        progress_var.set(initial_progress + processed_images * increment)
-        root.update_idletasks()  # Update the GUI
+        if not image_files:
+            print("No images found in the input directory.")
+            return
 
-    # When processing is complete.
-    progress_var.set(100)
-    status_label.config(text="Complete", foreground="green")
+        for image_file in image_files:
+            input_path = os.path.join(input_dir, image_file)
+            output_path = os.path.join(output_dir, f"processed_{image_file}")
+            self.input_queue.put((input_path, output_path))
 
-def start_processing():
-    input_dir = 'input_images'
-    output_dir = 'output_images'
-    os.makedirs(output_dir, exist_ok=True)
+        # Add sentinel values to indicate the end of the queue
+        for _ in range(multiprocessing.cpu_count()):
+            self.input_queue.put((None, None))
 
-    image_files = [f for f in os.listdir(input_dir) if f.endswith(('.png', '.jpg', '.jpeg'))]
+        processes = []
+        for _ in range(multiprocessing.cpu_count()):
+            process = multiprocessing.Process(target=process_image, args=(self.input_queue, self.progress_queue))
+            processes.append(process)
+            process.start()
 
-    if not image_files:
-        messagebox.showwarning("No Images", "No images found in the input directory.")
-        return
+        # Update progress in the main thread
+        self.update_progress(len(image_files))
 
-    input_queue = multiprocessing.Queue()
-    progress_queue = multiprocessing.Queue()
-
-    for image_file in image_files:
-        input_path = os.path.join(input_dir, image_file)
-        output_path = os.path.join(output_dir, f"processed_{image_file}")
-        input_queue.put((input_path, output_path))
-
-    # Add sentinel values to indicate the end of the queue
-    for _ in range(multiprocessing.cpu_count()):
-        input_queue.put((None, None))
-
-    processes = []
-    for _ in range(multiprocessing.cpu_count()):
-        process = multiprocessing.Process(target=process_image, args=(input_queue, progress_queue))
-        processes.append(process)
-        process.start()
-
-    # Update progress in the main thread
-    update_progress(progress_var, progress_queue, len(image_files), status_label)
-
-    for process in processes:
-        process.join()
+        for process in processes:
+            process.join()
 
 if __name__ == '__main__':
-    # Set up the GUI
-    root = tk.Tk()
-    root.title("Image Processing with Multi-core CPU")
-
-    total_cores = multiprocessing.cpu_count()
-
-    # Create labels for each CPU core
-    cpu_labels = []
-    for i in range(total_cores):
-        label = tk.Label(root, text=f"Core {i+1}: 0%")
-        label.pack(pady=2)
-        cpu_labels.append(label)
-
-    progress_var = tk.DoubleVar()
-    progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
-    progress_bar.pack(fill=tk.X, padx=20, pady=10)
-
-    # Status label
-    status_label = tk.Label(root, text="Processing...", foreground="black")
-    status_label.pack(pady=5)
-
-    start_button = tk.Button(root, text="Start Processing", command=start_processing)
-    start_button.pack(pady=10)
-
-    update_cpu_usage(cpu_labels)
-
-    root.mainloop()
+    app = QApplication(sys.argv)
+    window = ImageProcessorApp()
+    
+    # Timer for updating CPU usage every second
+    timer = QTimer()
+    timer.timeout.connect(window.update_cpu_usage)
+    timer.start(1000)  # 1000 ms
+    
+    window.show()
+    sys.exit(app.exec_())
